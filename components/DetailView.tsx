@@ -1,4 +1,5 @@
 
+
 import React, { useEffect } from 'react';
 import { DetailedTMDbResult, TMDbResult } from '../types.ts';
 import { TMDB_IMAGE_BASE_URL } from '../constants.ts';
@@ -122,8 +123,8 @@ export const DetailView: React.FC<DetailViewProps> = ({ item, isOpen, isLoading,
                                             <h3 className="font-bold text-white">Available on:</h3>
                                             <div className="flex items-center gap-3 mt-3">
                                                 {streamingProviders.map(p => (
-                                                    <a key={p.provider_id} href={item.watchProviders?.link} target="_blank" rel="noreferrer" title={p.provider_name}>
-                                                        <img src={`${TMDB_IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}`} alt={p.provider_name} className="w-10 h-10 rounded-lg hover:scale-110 transition-transform" />
+                                                    <a key={p.provider_id} href={item.watchProviders?.link} target="_blank" rel="noreferrer" title={p.provider_name} aria-label={`Watch on ${p.provider_name}`}>
+                                                        <img src={`${TMDB_IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}`} alt="" className="w-10 h-10 rounded-lg hover:scale-110 transition-transform" />
                                                     </a>
                                                 ))}
                                             </div>
