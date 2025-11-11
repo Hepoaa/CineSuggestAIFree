@@ -1,38 +1,43 @@
+
 import { GoogleGenAI, Type } from '@google/genai';
 import { AISearchData, ChatMessage } from '../types.ts';
 
 // The API key is securely managed by the environment.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-const FLEXIBLE_SEARCH_INSTRUCTION = `You are an AI search query pre-processor for a movie/TV show database. Your mission is to translate a user's query into an optimal search string for a flexible, metadata-based search engine. The search must be exhaustive and ignore people (actors, directors).
+const DISCOVER_SEARCH_INSTRUCTION = `You are an AI assistant for a movie/TV show recommendation app. Your task is to analyze a user's natural language query and convert it into a structured JSON object that can be used to search The Movie Database (TMDb).
 
-**The Search Engine's Logic (Your Target):**
-1.  **Multi-Field Search:** It searches across all metadata: title, genre, thematic tags, visual tags, and synopsis.
-2.  **"OR" Logic:** It treats every word in your output string as an "OR" condition. (e.g., "robot future rain" finds movies with 'robot' OR 'future' OR 'rain').
-3.  **Typo Tolerance:** It has a built-in fuzzy match for minor spelling errors.
+**Your Goal:**
+Extract key information from the user's query and format it according to the specified JSON schema. Prioritize structured data extraction over a simple search query.
 
-**Your Task & Rules:**
+**JSON Schema Fields:**
+- \`media_type\`: 'movie' or 'tv'. Infer this if possible (e.g., "show", "series" -> 'tv'). If not specified, omit it.
+- \`genres\`: An array of strings. Identify specific genres mentioned (e.g., "sci-fi", "comedy", "thriller").
+- \`keywords\`: An array of strings. Extract thematic elements, plot points, settings, or concepts (e.g., "time travel", "high school", "space exploration").
+- \`year\`: A number. Extract a specific year if mentioned.
+- \`search_query\`: A string. Use this ONLY as a fallback for direct title searches (e.g., "find me Inception") or when the query is too ambiguous for structured extraction.
 
-1.  **Analyze and Clean:** Read the user's query. Remove conversational filler and common stop words (e.g., 'peliculas de', 'a movie about', 'y', 'con').
-2.  **Correct Typos:** Fix obvious spelling mistakes in core terms (e.g., 'magi' -> 'magia', 'distpia' -> 'distopía').
-3.  **Extract Core Concepts:** Isolate the essential keywords that represent the title, genre, themes, or plot points.
-4.  **Build the "OR" Query:** Combine these core keywords into a single, space-separated string. This is the final search query. Do not add any operators like "OR".
-5.  **NO HUMAN ENTITIES:** Strictly ignore and remove any names of actors, directors, or characters from the final query.
-6.  **OUTPUT FORMAT:** You MUST respond with ONLY a valid JSON object with a single key 'search_query'. No other text or explanation.
+**Rules & Guidelines:**
+1.  **Prioritize Structure:** If the user describes a movie (e.g., "a sci-fi movie about robots in the future"), extract \`media_type\`, \`genres\`, and \`keywords\`. Do NOT use \`search_query\` in this case.
+2.  **Use Fallback Sparingly:** Only use \`search_query\` if the user provides a specific title, a person's name, or a very vague query.
+3.  **Be Specific with Keywords:** Extract the most descriptive and unique concepts. Avoid generic words.
+4.  **Do Not Hallucinate:** Only extract information explicitly mentioned or strongly implied by the user's query.
+5.  **Clean the Output:** Do not include conversational filler in the extracted values.
+6.  **OUTPUT FORMAT:** You MUST respond with ONLY a valid JSON object matching the schema. No other text or explanation.
 
 **EXAMPLES:**
 
-*   User Query: "peliculas de magia y amistad"
-    *   Your JSON Output: { "search_query": "magia amistad" }
+*   User Query: "a sad sci-fi movie from 2014 about space exploration"
+    *   Your JSON Output: { "media_type": "movie", "genres": ["Science Fiction", "Drama"], "keywords": ["space exploration"], "year": 2014 }
 
-*   User Query: "robot futuro lluvia"
-    *   Your JSON Output: { "search_query": "robot futuro lluvia" }
+*   User Query: "funny tv show about a group of friends in New York"
+    *   Your JSON Output: { "media_type": "tv", "genres": ["Comedy"], "keywords": ["friendship", "New York"] }
 
-*   User Query: "a show about a distopía with androids, directed by Ridley Scott"
-    *   Your JSON Output: { "search_query": "distopía androids" }
-
-*   User Query: "Terminator"
-    *   Your JSON Output: { "search_query": "Terminator" }
+*   User Query: "The Matrix"
+    *   Your JSON Output: { "search_query": "The Matrix" }
+    
+*   User Query: "show me something with time travel"
+    *   Your JSON Output: { "keywords": ["time travel"] }
 `;
 
 export const getSearchTermsFromAI = async (query: string): Promise<AISearchData> => {
@@ -41,17 +46,25 @@ export const getSearchTermsFromAI = async (query: string): Promise<AISearchData>
       model: 'gemini-2.5-flash',
       contents: `User Query: "${query}"`,
       config: {
-        systemInstruction: FLEXIBLE_SEARCH_INSTRUCTION,
+        systemInstruction: DISCOVER_SEARCH_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            search_query: {
-              type: Type.STRING,
-              description: 'The processed search query string with core concepts separated by spaces.'
-            }
+            search_query: { type: Type.STRING, description: 'Direct search query for a title or fallback.' },
+            media_type: { type: Type.STRING, description: 'The type of media: "movie" or "tv".' },
+            genres: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'An array of genre names.'
+            },
+            keywords: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'An array of thematic keywords.'
+            },
+            year: { type: Type.INTEGER, description: 'A specific release year.' }
           },
-          required: ['search_query']
         }
       }
     });

@@ -1,6 +1,10 @@
 
 export interface AISearchData {
-  search_query: string;
+  search_query?: string; // For direct title searches or fallbacks
+  media_type?: 'movie' | 'tv'; // Specific type requested
+  genres?: string[]; // e.g., ["Sci-Fi", "Thriller"]
+  keywords?: string[]; // e.g., ["time travel", "dystopian future"]
+  year?: number; // Specific year
 }
 
 export interface TMDbKeyword {

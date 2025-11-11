@@ -8,7 +8,7 @@ import { EmptyState } from './components/EmptyState.tsx';
 import { History } from './components/History.tsx';
 import { FilterControls } from './components/FilterControls.tsx';
 import { getSearchTermsFromAI, getChatResponseFromAI } from './services/aiService.ts';
-import { searchMedia, getTrending, getMediaDetails, getWatchProviders, getSimilarMedia, getRecommendedMedia } from './services/tmdbService.ts';
+import { searchMedia, getTrending, getMediaDetails, getWatchProviders, getSimilarMedia, getRecommendedMedia, getKeywordIds, getGenreIds, discoverMedia } from './services/tmdbService.ts';
 import { TMDbResult, AISearchData, View, SortOption, FilterOption, DetailedTMDbResult, ChatMessage } from './types.ts';
 import { useLocalStorage } from './hooks/useLocalStorage.ts';
 import { Welcome } from './components/Welcome.tsx';
@@ -139,16 +139,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isInitialRender.current) return;
     if (isNewSearchStarting.current) return;
-    // Sorting and filtering are handled client-side by `displayedResults`.
-    // We only need to trigger a full refetch when the language changes.
     startNewFetch();
   }, [language, startNewFetch]);
 
   // Initial load effect
   useEffect(() => {
-    // Detect browser language on first load if it hasn't been set
     if (!localStorage.getItem('cinesuggest_language')) {
-        const browserLang = navigator.language; // e.g., "en-US", "es-ES"
+        const browserLang = navigator.language;
         const matchedLang = SUPPORTED_LANGUAGES.find(l => l.code === browserLang) 
                          || SUPPORTED_LANGUAGES.find(l => l.code.startsWith(browserLang.split('-')[0]))
                          || SUPPORTED_LANGUAGES[0];
@@ -170,7 +167,7 @@ const App: React.FC = () => {
     setView('results');
     setHasSearched(true);
     setCurrentPage(1);
-    setCanLoadMore(true); // Will be re-evaluated in processAndSetResults
+    setCanLoadMore(true);
     setSortOption('popularity');
     setFilterOption('all');
 
@@ -179,25 +176,40 @@ const App: React.FC = () => {
     }
 
     try {
-        // 1. Semantic Search
         setLoaderMessage('Understanding your request...');
         const aiResponse: AISearchData = await getSearchTermsFromAI(query);
-        setCurrentSearchData(aiResponse); // For pagination
+        setCurrentSearchData(aiResponse);
 
-        const semanticQuery = aiResponse.search_query;
-
-        setLoaderMessage('Searching by concept & keywords...');
-        const semanticResultsPromise = searchMedia(semanticQuery, 1, language);
+        let searchResults: TMDbResult[] = [];
         
-        // 2. Keyword Search (for exhaustiveness)
-        const keywordResultsPromise = searchMedia(query, 1, language);
+        const useDiscover = (aiResponse.genres && aiResponse.genres.length > 0) || (aiResponse.keywords && aiResponse.keywords.length > 0);
 
-        const [semanticResults, keywordResults] = await Promise.all([semanticResultsPromise, keywordResultsPromise]);
+        if (useDiscover) {
+            setLoaderMessage('Finding matches based on your description...');
+            const mediaType = aiResponse.media_type;
+            const typesToSearch: ('movie' | 'tv')[] = mediaType ? [mediaType] : ['movie', 'tv'];
 
-        // 3. Combine and Deduplicate (prioritizing semantic results)
-        const combinedResults = [...semanticResults, ...keywordResults];
+            const discoverPromises = typesToSearch.map(async (type) => {
+                const [genreIds, keywordIds] = await Promise.all([
+                    getGenreIds(aiResponse.genres || [], type, language),
+                    getKeywordIds(aiResponse.keywords || [], language)
+                ]);
+
+                if (keywordIds.length > 0 || genreIds.length > 0) {
+                    return discoverMedia(type, genreIds, keywordIds, 1, 'popularity', language, aiResponse.year);
+                }
+                return [];
+            });
+            
+            const resultsByType = await Promise.all(discoverPromises);
+            searchResults = resultsByType.flat();
+        } else {
+            setLoaderMessage('Searching for titles...');
+            const queryToSearch = aiResponse.search_query || query;
+            searchResults = await searchMedia(queryToSearch, 1, language);
+        }
         
-        await processAndSetResults(combinedResults, []);
+        await processAndSetResults(searchResults, []);
 
     } catch (err) {
         handleError(err);
@@ -216,7 +228,29 @@ const App: React.FC = () => {
     try {
       let newResults: TMDbResult[] = [];
       if (view === 'results' && currentSearchData) {
-        newResults = await executeSearch(currentSearchData, nextPage, language);
+        const useDiscover = (currentSearchData.genres && currentSearchData.genres.length > 0) || (currentSearchData.keywords && currentSearchData.keywords.length > 0);
+        
+        if (useDiscover) {
+            const mediaType = currentSearchData.media_type;
+            const typesToSearch: ('movie' | 'tv')[] = mediaType ? [mediaType] : ['movie', 'tv'];
+
+            const discoverPromises = typesToSearch.map(async (type) => {
+                const [genreIds, keywordIds] = await Promise.all([
+                    getGenreIds(currentSearchData.genres || [], type, language),
+                    getKeywordIds(currentSearchData.keywords || [], language)
+                ]);
+
+                if (keywordIds.length > 0 || genreIds.length > 0) {
+                    return discoverMedia(type, genreIds, keywordIds, nextPage, sortOption, language, currentSearchData.year);
+                }
+                return [];
+            });
+            const resultsByType = await Promise.all(discoverPromises);
+            newResults = resultsByType.flat();
+        } else {
+            const queryToSearch = currentSearchData.search_query || '';
+            newResults = await searchMedia(queryToSearch, nextPage, language);
+        }
       } else if (view === 'trending') {
         newResults = await getTrending(nextPage, language);
       }
@@ -302,7 +336,7 @@ const App: React.FC = () => {
     const fetchAllDetails = async () => {
       setIsDetailLoading(true);
       setError(null);
-      setDetailedData(null); // Clear previous data to prevent showing stale content
+      setDetailedData(null);
       
       const [details, providers, similar, recommendations] = await Promise.all([
         getMediaDetails(selectedItem.media_type, selectedItem.id, language),
@@ -315,15 +349,13 @@ const App: React.FC = () => {
       });
 
       if (!details) {
-        // Error was handled, and loading is now false. Exit.
         return;
       }
       
-      // Combine, deduplicate, and limit the results
       const combinedSimilar = [...(similar || []), ...(recommendations || [])];
       const uniqueSimilarMap = new Map<number, TMDbResult>();
       combinedSimilar.forEach(item => {
-          if (item.id !== selectedItem.id) { // Ensure original item is not in the list
+          if (item.id !== selectedItem.id) {
               uniqueSimilarMap.set(item.id, item);
           }
       });
@@ -361,12 +393,10 @@ const App: React.FC = () => {
   const displayedResults = useMemo(() => {
     let sortedAndFiltered = [...results];
     
-    // Client-side filtering (acts as a fallback and for mixed results like from search/multi)
     if (filterOption !== 'all') {
         sortedAndFiltered = sortedAndFiltered.filter(r => r.media_type === filterOption);
     }
 
-    // Client-side sorting (ensures consistent order for all views, including trending and search/multi)
     switch(sortOption) {
         case 'release_date':
             sortedAndFiltered.sort((a, b) => {
@@ -380,7 +410,6 @@ const App: React.FC = () => {
             break;
         case 'popularity':
         default:
-            // TMDB API returns sorted by popularity for discover/trending, but this ensures it for multi-search results
             sortedAndFiltered.sort((a, b) => b.popularity - a.popularity);
             break;
     }
@@ -414,7 +443,7 @@ const App: React.FC = () => {
                     filterOption={filterOption}
                     onSortChange={setSortOption}
                     onFilterChange={setFilterOption}
-                    showSortControls={view === 'trending'}
+                    showSortControls={view !== 'results'}
                 />
             </div>
         )}
@@ -435,7 +464,7 @@ const App: React.FC = () => {
             />
           ) : hasSearched ? (
             <EmptyState />
-          ) : view !== 'favorites' ? ( // Don't show Welcome screen if favorites view is empty
+          ) : view !== 'favorites' ? ( 
             <Welcome />
           ) : (
             <p className="text-center text-text-secondary mt-16">You haven't added any favorites yet.</p>

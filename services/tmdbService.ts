@@ -1,6 +1,6 @@
 
 import { TMDB_API_KEY, TMDB_API_BASE_URL } from '../constants.ts';
-import { TMDbResponse, TMDbResult, TMDbKeywordResponse, SortOption, WatchProviderResponse, ProviderInfo } from '../types.ts';
+import { TMDbResponse, TMDbResult, TMDbKeywordResponse, SortOption, WatchProviderResponse, ProviderInfo, Genre } from '../types.ts';
 
 const fetchFromTMDb = async <T>(endpoint: string, language: string = 'en-US'): Promise<T> => {
   const url = `${TMDB_API_BASE_URL}/${endpoint}`;
@@ -41,7 +41,7 @@ export const getTrending = async (page: number = 1, language: string): Promise<T
 };
 
 export const getKeywordIds = async (keywords: string[], language: string): Promise<number[]> => {
-    if (keywords.length === 0) return [];
+    if (!keywords || keywords.length === 0) return [];
     const keywordPromises = keywords.map(keyword => 
         fetchFromTMDb<TMDbKeywordResponse>(`search/keyword?query=${encodeURIComponent(keyword)}&page=1`, language)
     );
@@ -50,12 +50,53 @@ export const getKeywordIds = async (keywords: string[], language: string): Promi
     return [...new Set(ids)]; // Return unique IDs
 };
 
-export const discoverMedia = async (type: 'movie' | 'tv', filterType: 'keyword' | 'genre', ids: number[], page: number = 1, sortOption: SortOption = 'popularity', language: string): Promise<TMDbResult[]> => {
-    if (ids.length === 0) return [];
-    const filterParam = filterType === 'keyword' ? 'with_keywords' : 'with_genres';
-    const idString = ids.join(',');
+let genreCache: { movie: Genre[], tv: Genre[] } = { movie: [], tv: [] };
+
+const getGenreList = async (type: 'movie' | 'tv', language: string): Promise<Genre[]> => {
+    if (genreCache[type].length > 0) {
+        return genreCache[type];
+    }
+    const data = await fetchFromTMDb<{ genres: Genre[] }>(`genre/${type}/list`, language);
+    genreCache[type] = data.genres;
+    return data.genres;
+};
+
+export const getGenreIds = async (genreNames: string[], type: 'movie' | 'tv', language: string): Promise<number[]> => {
+    if (!genreNames || genreNames.length === 0) return [];
+    const genreList = await getGenreList(type, language);
+    const lowerCaseGenreNames = genreNames.map(g => g.toLowerCase().trim());
+    
+    return genreList
+        .filter(genre => lowerCaseGenreNames.includes(genre.name.toLowerCase().trim()))
+        .map(genre => genre.id);
+};
+
+export const discoverMedia = async (
+    type: 'movie' | 'tv', 
+    genreIds: number[], 
+    keywordIds: number[], 
+    page: number = 1, 
+    sortOption: SortOption = 'popularity', 
+    language: string,
+    year?: number
+): Promise<TMDbResult[]> => {
+    if (genreIds.length === 0 && keywordIds.length === 0) return [];
+
     const sortBy = getSortByValue(sortOption, type);
-    const data = await fetchFromTMDb<TMDbResponse>(`discover/${type}?${filterParam}=${idString}&sort_by=${sortBy}&page=${page}&include_adult=false`, language);
+    let endpoint = `discover/${type}?sort_by=${sortBy}&page=${page}&include_adult=false`;
+
+    if (genreIds.length > 0) {
+        endpoint += `&with_genres=${genreIds.join(',')}`;
+    }
+    if (keywordIds.length > 0) {
+        endpoint += `&with_keywords=${keywordIds.join(',')}`;
+    }
+    if (year) {
+        const yearParam = type === 'movie' ? 'primary_release_year' : 'first_air_date_year';
+        endpoint += `&${yearParam}=${year}`;
+    }
+
+    const data = await fetchFromTMDb<TMDbResponse>(endpoint, language);
     return data.results.map(r => ({ ...r, media_type: type }));
 };
 
