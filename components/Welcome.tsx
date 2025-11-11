@@ -2,7 +2,7 @@
 import React from 'react';
 
 const IdeaIcon: React.FC<{className: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.311a15.045 15.045 0 0 1-3.75 0M12 6.75h.008v.008H12V6.75Zm-2.25-1.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Zm3 0a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z" />
     </svg>
 );

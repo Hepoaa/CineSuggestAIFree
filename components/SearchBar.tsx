@@ -35,8 +35,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
                 />
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
                      {query && !isLoading && (
-                        <button type="button" onClick={handleClear} className="text-text-secondary hover:text-text-primary mr-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
+                        <button type="button" onClick={handleClear} className="text-text-secondary hover:text-text-primary mr-2" aria-label="Clear search">
+                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6" aria-hidden="true">
                             <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.707-10.707a1 1 0 0 0-1.414-1.414L10 8.586 7.707 6.293a1 1 0 0 0-1.414 1.414L8.586 10l-2.293 2.293a1 1 0 1 0 1.414 1.414L10 11.414l2.293 2.293a1 1 0 0 0 1.414-1.414L11.414 10l2.293-2.293Z" clipRule="evenodd" />
                             </svg>
                         </button>
