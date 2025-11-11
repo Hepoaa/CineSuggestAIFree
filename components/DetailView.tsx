@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DetailedTMDbResult, TMDbResult } from '../types.ts';
 import { TMDB_IMAGE_BASE_URL } from '../constants.ts';
 import { MovieCard } from './MovieCard.tsx';
@@ -28,6 +28,20 @@ const HeartIcon: React.FC<{className: string, isFavorite: boolean}> = ({classNam
 );
 
 export const DetailView: React.FC<DetailViewProps> = ({ item, isOpen, isLoading, onClose, onToggleFavorite, isFavorite, onSelectSimilar, favorites }) => {
+    
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (isOpen && event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen, onClose]);
+    
     if (!isOpen) return null;
 
     const backdropUrl = item?.backdrop_path ? `${TMDB_IMAGE_BASE_URL.replace('w500', 'w1280')}${item.backdrop_path}` : '';
@@ -46,6 +60,9 @@ export const DetailView: React.FC<DetailViewProps> = ({ item, isOpen, isLoading,
         <div 
           className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={item ? "detail-view-title" : undefined}
         >
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
             <div 
@@ -77,7 +94,7 @@ export const DetailView: React.FC<DetailViewProps> = ({ item, isOpen, isLoading,
                                     <img src={posterUrl} alt={title} className="w-full h-auto rounded-lg shadow-lg aspect-[2/3]"/>
                                 </div>
                                 <div className="md:w-2/3 text-left">
-                                    <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">{title}</h1>
+                                    <h1 id="detail-view-title" className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">{title}</h1>
                                     <div className="flex items-center gap-4 mt-2 text-text-secondary">
                                         <span>{year}</span>
                                         <div className="flex items-center gap-1">
