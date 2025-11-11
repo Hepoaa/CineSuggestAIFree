@@ -1,9 +1,5 @@
-
-import { GoogleGenAI, Type } from '@google/genai';
 import { AISearchData, ChatMessage } from '../types.ts';
-
-// The API key is securely managed by the environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+import { OPENROUTER_API_KEY, OPENROUTER_API_BASE_URL, OPENROUTER_CHAT_MODEL } from '../constants.ts';
 
 const DISCOVER_SEARCH_INSTRUCTION = `You are an AI assistant for a movie/TV show recommendation app. Your task is to analyze a user's natural language query and convert it into a structured JSON object that can be used to search The Movie Database (TMDb).
 
@@ -42,35 +38,31 @@ Extract key information from the user's query and format it according to the spe
 
 export const getSearchTermsFromAI = async (query: string): Promise<AISearchData> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `User Query: "${query}"`,
-      config: {
-        systemInstruction: DISCOVER_SEARCH_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            search_query: { type: Type.STRING, description: 'Direct search query for a title or fallback.' },
-            media_type: { type: Type.STRING, description: 'The type of media: "movie" or "tv".' },
-            genres: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: 'An array of genre names.'
-            },
-            keywords: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: 'An array of thematic keywords.'
-            },
-            year: { type: Type.INTEGER, description: 'A specific release year.' }
-          },
-        }
-      }
+    const response = await fetch(`${OPENROUTER_API_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_CHAT_MODEL,
+        messages: [
+          { role: 'system', content: DISCOVER_SEARCH_INSTRUCTION },
+          { role: 'user', content: `User Query: "${query}"` }
+        ],
+        response_format: { type: "json_object" }
+      })
     });
 
-    const jsonString = response.text;
-    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); // Gracefully handle non-json error responses
+        const errorMessage = errorData.error?.message || 'Unknown API error';
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
+    }
+
+    const data = await response.json();
+    const jsonString = data.choices[0]?.message?.content;
+
     if (!jsonString) {
       throw new Error("AI returned an empty response.");
     }
@@ -78,7 +70,7 @@ export const getSearchTermsFromAI = async (query: string): Promise<AISearchData>
     return JSON.parse(jsonString) as AISearchData;
 
   } catch (error) {
-    console.error("Error calling Gemini API for search:", error);
+    console.error("Error calling OpenRouter API for search:", error);
     console.warn("AI search term generation failed. Falling back to raw query.");
     return { search_query: query };
   }
@@ -87,24 +79,37 @@ export const getSearchTermsFromAI = async (query: string): Promise<AISearchData>
 const CHAT_SYSTEM_INSTRUCTION = `You are CineSuggest AI, a friendly and knowledgeable chatbot specializing in movies and TV shows. Your goal is to have a natural conversation with the user, helping them discover new things to watch, answer trivia, or just chat about film. Be conversational, engaging, and helpful. Don't just provide lists; explain why you're suggesting something. Keep your responses concise and easy to read.`;
 
 export const getChatResponseFromAI = async (history: ChatMessage[]): Promise<string> => {
-    // Convert the app's message format to the format expected by the Gemini API
-    const contents = history
+    const messages = history
         .filter(msg => msg.role !== 'error')
         .map(msg => ({
-            role: msg.role === 'ai' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
+            role: msg.role === 'ai' ? 'assistant' : 'user',
+            content: msg.content
         }));
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: contents,
-            config: {
-              systemInstruction: CHAT_SYSTEM_INSTRUCTION
-            }
+        const response = await fetch(`${OPENROUTER_API_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: OPENROUTER_CHAT_MODEL,
+                messages: [
+                    { role: 'system', content: CHAT_SYSTEM_INSTRUCTION },
+                    ...messages
+                ]
+            })
         });
 
-        const content = response.text;
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.error?.message || 'Unknown API error';
+            throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content;
 
         if (!content) {
             throw new Error("AI returned an empty or invalid chat response.");
@@ -112,7 +117,7 @@ export const getChatResponseFromAI = async (history: ChatMessage[]): Promise<str
         
         return content;
     } catch (error) {
-        console.error("Error calling Gemini API for chat:", error);
+        console.error("Error calling OpenRouter API for chat:", error);
         throw new Error("Failed to get chat response from AI.");
     }
 };

@@ -1,4 +1,4 @@
-// FIX: Import Dispatch and SetStateAction from 'react' to resolve 'Cannot find namespace React' error.
+
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 
 function getStorageValue<T>(key: string, defaultValue: T): T {
@@ -16,7 +16,6 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
   return defaultValue;
 }
 
-// FIX: Use imported Dispatch and SetStateAction types directly without the 'React.' prefix.
 export function useLocalStorage<T>(key: string, defaultValue: T): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
     return getStorageValue(key, defaultValue);

@@ -157,7 +157,6 @@ export const DetailView: React.FC<DetailViewProps> = ({ item, isOpen, isLoading,
                     </>
                 )}
             </div>
-            {/* FIX: The 'jsx' and 'global' props are not standard HTML attributes for the <style> tag and are specific to CSS-in-JS libraries like styled-jsx. Removing them resolves the TypeScript error. */}
             <style>{`
                 .animate-fade-in-up {
                     animation: fadeInUp 0.3s ease-out forwards;

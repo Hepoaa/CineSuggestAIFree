@@ -19,7 +19,7 @@ import { ChatView } from './components/ChatView.tsx';
 
 const ChatIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7" aria-hidden="true">
-        <path fillRule="evenodd" d="M5.337 21.063a.75.75 0 0 1-.613.882c-1.34.22-2.58.6-3.737 1.125a.75.75 0 0 1-1.002-.873 11.233 11.233 0 0 1 2.25-5.223.75.75 0 0 1 .43-..33L3 16.5c-1.468-1.468-2.25-3.41-2.25-5.437 0-4.142 4.03-7.5 9-7.5s9 3.358 9 7.5c0 4.142-4.03 7.5-9 7.5a10.02 10.02 0 0 1-5.337-1.563Z" clipRule="evenodd" />
+        <path fillRule="evenodd" d="M5.337 21.063a.75.75 0 0 1-.613.882c-1.34.22-2.58.6-3.737 1.125a.75.75 0 0 1-1.002-.873 11.233 11.233 0 0 1 2.25-5.223.75.75 0 0 1 .43-.33L3 16.5c-1.468-1.468-2.25-3.41-2.25-5.437 0-4.142 4.03-7.5 9-7.5s9 3.358 9 7.5c0 4.142-4.03 7.5-9 7.5a10.02 10.02 0 0 1-5.337-1.563Z" clipRule="evenodd" />
         <path fillRule="evenodd" d="M15.75 8.25a.75.75 0 0 1 .75.75v5.13l1.19-1.19a.75.75 0 0 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.19 1.19V9a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
     </svg>
 );
@@ -101,17 +101,6 @@ const App: React.FC = () => {
     return await searchMedia(searchData.search_query, page, lang);
   }, []);
 
-  const fetchTrending = useCallback(async (lang: string) => {
-    setIsLoading(true);
-    setLoaderMessage('Fetching trending titles...');
-    setError(null);
-    try {
-      const trendingResults = await getTrending(1, lang);
-      await processAndSetResults(trendingResults, []);
-    } catch (err) { handleError(err); } 
-    finally { setIsLoading(false); }
-  }, [processAndSetResults]);
-
   const startNewFetch = useCallback(async () => {
     if (view === 'favorites') return;
     setCurrentPage(1);
@@ -142,19 +131,65 @@ const App: React.FC = () => {
     startNewFetch();
   }, [language, startNewFetch]);
 
-  // Initial load effect
+  // Initial load effect - rewritten for robustness
   useEffect(() => {
-    if (!localStorage.getItem('cinesuggest_language')) {
+    // This logic should only run once on component mount.
+    const initialFetch = async () => {
+      let langCodeToUse = language;
+      let regionToUse = region;
+
+      // Detect language if it's not set in localStorage yet
+      if (!localStorage.getItem('cinesuggest_language')) {
         const browserLang = navigator.language;
         const matchedLang = SUPPORTED_LANGUAGES.find(l => l.code === browserLang) 
                          || SUPPORTED_LANGUAGES.find(l => l.code.startsWith(browserLang.split('-')[0]))
                          || SUPPORTED_LANGUAGES[0];
+        
+        // Set state for subsequent renders
         setLanguage(matchedLang.code);
         setRegion(matchedLang.region);
-    }
-    fetchTrending(language);
-    isInitialRender.current = false;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+        // Use the newly detected language for the initial fetch
+        langCodeToUse = matchedLang.code;
+        regionToUse = matchedLang.region;
+      }
+
+      setIsLoading(true);
+      setLoaderMessage('Fetching trending titles...');
+      setError(null);
+      
+      try {
+        const trendingResults = await getTrending(1, langCodeToUse);
+        
+        // Manually process results for this initial fetch since `processAndSetResults` depends on `region` state which might not be updated yet
+        const resultsWithProvidersPromises = trendingResults.map(async (result) => {
+          if (!result || !result.id) return result;
+          const providers = await getWatchProviders(result.media_type, result.id, regionToUse);
+          return { ...result, watchProviders: providers };
+        });
+        const enrichedNewResults = await Promise.all(resultsWithProvidersPromises);
+
+        const uniqueResultsMap = new Map<string, TMDbResult>();
+        enrichedNewResults.forEach(result => {
+          if (result && result.id) { 
+            uniqueResultsMap.set(`${result.media_type}-${result.id}`, result);
+          }
+        });
+        
+        setResults(Array.from(uniqueResultsMap.values()));
+        setCanLoadMore(enrichedNewResults.length >= TMDB_PAGE_SIZE);
+      } catch (err) { 
+        handleError(err); 
+      } finally { 
+        setIsLoading(false); 
+        isInitialRender.current = false;
+      }
+    };
+
+    initialFetch();
+    // This effect is INTENTIONALLY run only once on mount. Dependencies are handled manually inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -273,7 +308,7 @@ const App: React.FC = () => {
     }
   };
   
-  const handleViewChange = (newView: View) => {
+  const handleViewChange = async (newView: View) => {
       handleCloseDetailView();
       setView(newView);
       setHasSearched(false);
@@ -284,7 +319,15 @@ const App: React.FC = () => {
       if (newView === 'trending') {
         setSortOption('popularity');
         setFilterOption('all');
-        fetchTrending(language);
+        setIsLoading(true);
+        try {
+            const trendingResults = await getTrending(1, language);
+            await processAndSetResults(trendingResults, []);
+        } catch(err) {
+            handleError(err);
+        } finally {
+            setIsLoading(false);
+        }
       } else if (newView === 'favorites') {
         setCanLoadMore(false);
         showFavorites();
