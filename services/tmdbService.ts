@@ -40,15 +40,42 @@ export const getTrending = async (page: number = 1, language: string): Promise<T
   return data.results.filter(result => (result.media_type === 'movie' || result.media_type === 'tv') && result.poster_path);
 };
 
+let keywordCache: Map<string, number> = new Map();
+
 export const getKeywordIds = async (keywords: string[], language: string): Promise<number[]> => {
     if (!keywords || keywords.length === 0) return [];
-    const keywordPromises = keywords.map(keyword => 
-        fetchFromTMDb<TMDbKeywordResponse>(`search/keyword?query=${encodeURIComponent(keyword)}&page=1`, language)
-    );
-    const keywordResponses = await Promise.all(keywordPromises);
-    const ids = keywordResponses.flatMap(res => res.results.length > 0 ? [res.results[0].id] : []);
-    return [...new Set(ids)]; // Return unique IDs
+
+    const uniqueKeywords = [...new Set(keywords.map(k => k.toLowerCase().trim()))];
+    const cachedIds: number[] = [];
+    const keywordsToFetch: string[] = [];
+
+    for (const keyword of uniqueKeywords) {
+        if (keywordCache.has(keyword)) {
+            cachedIds.push(keywordCache.get(keyword)!);
+        } else {
+            keywordsToFetch.push(keyword);
+        }
+    }
+
+    if (keywordsToFetch.length > 0) {
+        const keywordPromises = keywordsToFetch.map(keyword =>
+            fetchFromTMDb<TMDbKeywordResponse>(`search/keyword?query=${encodeURIComponent(keyword)}&page=1`, language)
+        );
+        const keywordResponses = await Promise.all(keywordPromises);
+
+        keywordResponses.forEach((res, index) => {
+            if (res.results.length > 0) {
+                const keywordId = res.results[0].id;
+                const originalKeyword = keywordsToFetch[index];
+                cachedIds.push(keywordId);
+                keywordCache.set(originalKeyword, keywordId);
+            }
+        });
+    }
+
+    return [...new Set(cachedIds)]; // Return unique IDs
 };
+
 
 let genreCache: { movie: Genre[], tv: Genre[] } = { movie: [], tv: [] };
 
@@ -80,7 +107,7 @@ export const discoverMedia = async (
     language: string,
     year?: number
 ): Promise<TMDbResult[]> => {
-    if (genreIds.length === 0 && keywordIds.length === 0) return [];
+    if (genreIds.length === 0 && keywordIds.length === 0 && !year) return [];
 
     const sortBy = getSortByValue(sortOption, type);
     let endpoint = `discover/${type}?sort_by=${sortBy}&page=${page}&include_adult=false`;
