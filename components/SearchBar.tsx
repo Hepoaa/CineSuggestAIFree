@@ -32,6 +32,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
                 placeholder="e.g., 'a sad shark movie with robots'"
                 disabled={isLoading}
                 className="w-full pl-5 pr-40 py-4 text-lg text-text-primary bg-base-200 border-2 border-base-300 rounded-full focus:ring-2 focus:ring-brand-accent focus:outline-none transition-all duration-300 disabled:opacity-50"
+                aria-label="Search for movies and series"
                 />
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
                      {query && !isLoading && (

@@ -35,10 +35,21 @@ export const MovieCard: React.FC<MovieCardProps> = ({ item, onToggleFavorite, on
     onToggleFavorite(item);
   }
 
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onViewDetails(item);
+    }
+  }
+
   return (
     <div 
         className="bg-base-200 rounded-lg overflow-hidden shadow-lg transform transition-transform duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-brand-accent/30 group cursor-pointer"
         onClick={() => onViewDetails(item)}
+        onKeyDown={handleCardKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={`View details for ${title}`}
     >
       <div className="relative">
         <img src={posterUrl} alt={title} className="w-full h-auto object-cover aspect-[2/3]" />

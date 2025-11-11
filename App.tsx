@@ -18,7 +18,7 @@ import { ChatView } from './components/ChatView.tsx';
 
 
 const ChatIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7" aria-hidden="true">
         <path fillRule="evenodd" d="M5.337 21.063a.75.75 0 0 1-.613.882c-1.34.22-2.58.6-3.737 1.125a.75.75 0 0 1-1.002-.873 11.233 11.233 0 0 1 2.25-5.223.75.75 0 0 1 .43-..33L3 16.5c-1.468-1.468-2.25-3.41-2.25-5.437 0-4.142 4.03-7.5 9-7.5s9 3.358 9 7.5c0 4.142-4.03 7.5-9 7.5a10.02 10.02 0 0 1-5.337-1.563Z" clipRule="evenodd" />
         <path fillRule="evenodd" d="M15.75 8.25a.75.75 0 0 1 .75.75v5.13l1.19-1.19a.75.75 0 0 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.19 1.19V9a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
     </svg>
