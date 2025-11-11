@@ -1,0 +1,5 @@
+{
+  "name": "GG",
+  "description": "An AI-powered movie and series recommendation app that understands natural language queries. It uses an advanced AI model via OpenRouter to interpret user requests and fetches suggestions from TMDb.",
+  "requestFramePermissions": []
+}
