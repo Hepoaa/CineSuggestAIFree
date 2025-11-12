@@ -5,10 +5,6 @@ export const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 export const TMDB_PAGE_SIZE = 20; // TMDb API returns 20 results per page by default
 
-export const OPENROUTER_API_KEY = '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';
-export const OPENROUTER_API_BASE_URL = 'https://openrouter.ai/api/v1';
-export const OPENROUTER_CHAT_MODEL = 'mistralai/mistral-7b-instruct:free';
-
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     { code: 'en-US', region: 'US', label: '🇺🇸 English (US)' },
     { code: 'es-ES', region: 'ES', label: '🇪🇸 Español (España)' },
